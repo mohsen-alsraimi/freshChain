@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FreshChain – Blockchain Supply Chain</title>
+
+<!-- QR -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<!-- Ethers v5 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+
+<style>
+* { box-sizing: border-box; font-family: Inter, Arial, sans-serif; }
+
+body {
+  margin: 0;
+  background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+  color: #fff;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1100px;
+  margin: auto;
+  padding: 40px;
+}
+
+h1 { text-align: center; margin-bottom: 30px; }
+
+.card {
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 25px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+input, select, button {
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  border-radius: 8px;
+  border: none;
+}
+
+input, select {
+  background: rgba(255,255,255,0.15);
+  color: white;
+}
+
+button {
+  background: #00c6ff;
+  color: black;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover { background: #00aaff; }
+
+.hidden { display: none; }
+
+pre {
+  background: rgba(0,0,0,0.4);
+  padding: 15px;
+  border-radius: 10px;
+  overflow-x: auto;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>FreshChain – Blockchain Supply Chain</h1>
+
+<!-- CONNECT -->
+<div class="card">
+  <button onclick="connect()">Connect MetaMask</button>
+  <p><b>Wallet:</b> <span id="wallet">Not connected</span></p>
+
+  <!-- 🔧 FIX: onchange + oninput -->
+  <select id="role" onchange="showRole()" oninput="showRole()">
+    <option value="admin">Admin</option>
+    <option value="producer">Producer</option>
+    <option value="transporter">Transporter</option>
+    <option value="retailer">Retailer</option>
+    <option value="customer">Customer</option>
+  </select>
+</div>
+
+<!-- ADMIN -->
+<div id="admin" class="card hidden">
+  <h2>Admin Panel</h2>
+  <input id="addr" placeholder="Wallet Address">
+  <button onclick="registerProducer()">Register Producer</button>
+  <button onclick="registerTransporter()">Register Transporter</button>
+  <button onclick="registerRetailer()">Register Retailer</button>
+</div>
+
+<!-- PRODUCER -->
+<div id="producer" class="card hidden">
+  <h2>Producer Panel</h2>
+  <input id="pid" placeholder="Batch ID">
+  <input id="pname" placeholder="Product Name">
+  <input id="pqty" placeholder="Quantity">
+  <button onclick="createBatch()">Create Batch</button>
+</div>
+
+<!-- TRANSPORTER -->
+<div id="transporter" class="card hidden">
+  <h2>Transporter Panel</h2>
+  <input id="tid" placeholder="Batch ID">
+  <input id="temp" placeholder="Temperature (°C)">
+  <input id="hum" placeholder="Humidity (%)">
+  <input id="loc" placeholder="Location">
+  <button onclick="addSensor()">Add Sensor Data</button>
+</div>
+
+<!-- RETAILER -->
+<div id="retailer" class="card hidden">
+  <h2>Retailer Panel</h2>
+  <input id="rid" placeholder="Batch ID">
+  <select id="passed">
+    <option value="true">Pass Inspection</option>
+    <option value="false">Fail Inspection</option>
+  </select>
+  <button onclick="inspect()">Submit Inspection</button>
+</div>
+
+<!-- CUSTOMER -->
+<div id="customer" class="card hidden">
+  <h2>Customer Verification</h2>
+  <input id="cid" placeholder="Batch ID">
+  <button onclick="history()">View Product History</button>
+
+  <h3>Product History</h3>
+  <pre id="output"></pre>
+
+  <h3>QR Code</h3>
+  <canvas id="qr"></canvas>
+</div>
+
+</div>
+
+<script>
+/* ===== CONFIG ===== */
+const CONTRACT_ADDRESS = "0xcd62Ec67B5Cc19920f18104ACCcC6973c34faaD1";
+const SEPOLIA_CHAIN_ID = "0xaa36a7";
+
+const ABI = [
+  "function registerProducer(address)",
+  "function registerTransporter(address)",
+  "function registerRetailer(address)",
+  "function createBatch(uint,string,uint)",
+  "function addSensorData(uint,int,int,string)",
+  "function inspect(uint,bool)",
+  "function getBatch(uint) view returns (tuple(string,uint,address,address,bool,bool))",
+  "function getSensors(uint) view returns (tuple(int,int,string,uint)[])",
+  "function getTransfers(uint) view returns (tuple(address,address,uint)[])"
+];
+
+let provider, signer, contract;
+
+/* ===== CONNECT ===== */
+async function connect() {
+  const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+  const chainId = await window.ethereum.request({ method: "eth_chainId" });
+
+  if (chainId !== SEPOLIA_CHAIN_ID) {
+    alert("Please switch MetaMask to Sepolia");
+    return;
+  }
+
+  provider = new ethers.providers.Web3Provider(window.ethereum);
+  signer = provider.getSigner();
+  contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+  document.getElementById("wallet").innerText = accounts[0];
+}
+
+/* ===== ROLE UI ===== */
+function showRole() {
+  ["admin","producer","transporter","retailer","customer"].forEach(id => {
+    document.getElementById(id).classList.add("hidden");
+  });
+
+  document.getElementById(role.value).classList.remove("hidden");
+}
+
+/* ===== ADMIN ===== */
+async function registerProducer(){ await contract.registerProducer(addr.value); alert("Producer registered"); }
+async function registerTransporter(){ await contract.registerTransporter(addr.value); alert("Transporter registered"); }
+async function registerRetailer(){ await contract.registerRetailer(addr.value); alert("Retailer registered"); }
+
+/* ===== PRODUCER ===== */
+async function createBatch(){
+  await contract.createBatch(pid.value, pname.value, pqty.value);
+  alert("Batch created");
+}
+
+/* ===== TRANSPORTER ===== */
+async function addSensor(){
+  await contract.addSensorData(tid.value, temp.value, hum.value, loc.value);
+  alert("Sensor data added");
+}
+
+/* ===== RETAILER ===== */
+async function inspect(){
+  await contract.inspect(rid.value, passed.value === "true");
+  alert("Inspection submitted");
+}
+
+/* ===== CUSTOMER ===== */
+async function history(){
+  const id = cid.value;
+
+  const b = await contract.getBatch(id);
+  const s = await contract.getSensors(id);
+  const t = await contract.getTransfers(id);
+
+  output.innerText = JSON.stringify({ batch:b, sensors:s, transfers:t }, null, 2);
+
+  const PUBLIC_URL = "https://subglottally-uninterleaved-scarlette.ngrok-free.dev";
+  const url = PUBLIC_URL + "/view.html?batchId=" + id + "&v=" + Date.now();
+
+
+  
+  QRCode.toCanvas(document.getElementById("qr"), url);
+}
+
+/* ===== INITIAL ===== */
+window.onload = () => {
+  showRole();
+};
+</script>
+
+</body>
+</html>

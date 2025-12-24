@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Product Verification</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+
+<style>
+body {
+  font-family: Arial;
+  background: #0f2027;
+  color: white;
+  padding: 20px;
+}
+.box {
+  background: #203a43;
+  padding: 20px;
+  border-radius: 12px;
+}
+h2 { margin-top: 0; }
+.item { margin-bottom: 10px; }
+</style>
+</head>
+
+<body>
+
+<div class="box">
+  <h2>Product Verification</h2>
+
+  <div class="item"><b>Batch ID:</b> <span id="id"></span></div>
+  <div class="item"><b>Product:</b> <span id="product"></span></div>
+  <div class="item"><b>Quantity:</b> <span id="qty"></span></div>
+  <div class="item"><b>Creator:</b> <span id="creator"></span></div>
+  <div class="item"><b>Current Owner:</b> <span id="owner"></span></div>
+  <div class="item"><b>Inspection:</b> <span id="inspection"></span></div>
+
+  <h3>Sensor Data</h3>
+  <div id="sensors"></div>
+
+  <h3>Transfers</h3>
+  <div id="transfers"></div>
+</div>
+
+
+<script>
+const CONTRACT_ADDRESS = "0xcd62Ec67B5Cc19920f18104ACCcC6973c34faaD1";
+
+const ABI = [
+  "function getBatch(uint) view returns (tuple(string,uint,address,address,bool,bool))",
+  "function getSensors(uint) view returns (tuple(int,int,string,uint)[])",
+  "function getTransfers(uint) view returns (tuple(address,address,uint)[])"
+];
+
+async function load() {
+  try {
+    const batchId = new URLSearchParams(window.location.search).get("batchId");
+    if (!batchId) return;
+
+    document.getElementById("id").textContent = batchId;
+
+    const provider = new ethers.providers.JsonRpcProvider("https://rpc.sepolia.org");
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+
+    const b = await contract.getBatch(batchId);
+    const sensors = await contract.getSensors(batchId);
+    const transfers = await contract.getTransfers(batchId);
+
+    // ===== BATCH =====
+    document.getElementById("product").textContent = b[0];
+    document.getElementById("qty").textContent = String(b[1]);
+    document.getElementById("creator").textContent = b[2];
+    document.getElementById("owner").textContent = b[3];
+    document.getElementById("inspection").textContent =
+      b[4] ? (b[5] ? "PASSED" : "FAILED") : "NOT INSPECTED";
+
+    // ===== SENSORS =====
+    const sDiv = document.getElementById("sensors");
+    sDiv.innerHTML = "";
+    sensors.forEach(s => {
+      sDiv.innerHTML +=
+        `<div>🌡 ${String(s[0])}°C | 💧 ${String(s[1])}% | 📍 ${s[2]}</div>`;
+    });
+
+    // ===== TRANSFERS =====
+    const tDiv = document.getElementById("transfers");
+    tDiv.innerHTML = "";
+    transfers.forEach(t => {
+      tDiv.innerHTML += `<div>🔁 ${t[0]} → ${t[1]}</div>`;
+    });
+
+  } catch (e) {
+    document.body.innerHTML =
+      "<pre style='color:red'>" + e.stack + "</pre>";
+  }
+}
+
+window.onload = load;
+</script>
+
+
+</body>
+</html>
